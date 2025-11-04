@@ -1,0 +1,27 @@
+[project]
+name = "ai-service"
+version = "0.1.0"
+description = "AI service using Semantic Kernel and FastAPI"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi==0.121.0",
+    "uvicorn[standard]==0.34.0",
+    "semantic-kernel==1.37.1",
+    "azure-ai-inference==1.0.0b9",
+    "azure-identity==1.25.1",
+    "pydantic==2.11.1",
+    "pydantic-settings==2.11.0",
+    "python-multipart==0.0.20",
+    "opentelemetry-sdk==1.38.0",
+    "opentelemetry-exporter-otlp-proto-http==1.38.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.uv]
+prerelease = "allow"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
