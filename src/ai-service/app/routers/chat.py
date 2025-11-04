@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from ..core.dependencies import AgentServiceDep
 from ..models import ChatRequest, ChatResponse
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 @router.post("/stream")
@@ -72,6 +72,8 @@ async def chat(request: ChatRequest, agent_service: AgentServiceDep):
         )
         return ChatResponse(response=response_text, history=updated_history)
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(
             status_code=500, detail=f"Error processing chat request: {str(e)}"
         ) from e

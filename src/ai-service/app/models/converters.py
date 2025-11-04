@@ -53,11 +53,24 @@ def sk_to_chat_history(sk_history: ChatHistory) -> ChatHistoryModel:
 
     for message in sk_history.messages:
         role_str = str(message.role).lower()
-        if role_str == "system":
-            history.add_system_message(message.content)
-        elif role_str == "user":
-            history.add_user_message(message.content)
-        elif role_str == "assistant":
-            history.add_assistant_message(message.content)
+
+        # Extract content - handle both strings and complex objects
+        content = ""
+        if hasattr(message, "content") and message.content is not None:
+            # If content is a string, use it directly
+            if isinstance(message.content, str):
+                content = message.content
+            # Otherwise convert to string
+            else:
+                content = str(message.content)
+
+        # Only add non-empty messages
+        if content:
+            if role_str == "system":
+                history.add_system_message(content)
+            elif role_str == "user":
+                history.add_user_message(content)
+            elif role_str == "assistant":
+                history.add_assistant_message(content)
 
     return history

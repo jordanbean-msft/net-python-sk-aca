@@ -1,0 +1,99 @@
+### AI Service API Testing
+### Use the REST Client extension in VS Code to run these requests
+
+@baseUrl = http://localhost:8000
+
+### Health Check
+GET {{baseUrl}}/health
+
+### Root Endpoint
+GET {{baseUrl}}/
+
+### Chat - Non-streaming (Simple message)
+POST {{baseUrl}}/chat
+Content-Type: application/json
+
+{
+  "message": "Hello! What can you help me with?",
+  "stream": false
+}
+
+### Chat - Non-streaming (With conversation history)
+POST {{baseUrl}}/chat
+Content-Type: application/json
+
+{
+  "message": "What did I just ask you?",
+  "history": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a helpful AI assistant."
+      },
+      {
+        "role": "user",
+        "content": "What is the capital of France?"
+      },
+      {
+        "role": "assistant",
+        "content": "The capital of France is Paris."
+      }
+    ]
+  },
+  "stream": false
+}
+
+### Chat - Streaming
+POST {{baseUrl}}/chat/stream
+Content-Type: application/json
+
+{
+  "message": "Tell me a short joke",
+  "stream": true
+}
+
+### Chat - Streaming with history
+POST {{baseUrl}}/chat/stream
+Content-Type: application/json
+
+{
+  "message": "Can you tell me another one?",
+  "history": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Tell me a joke"
+      },
+      {
+        "role": "assistant",
+        "content": "Why did the programmer quit his job? Because he didn't get arrays!"
+      }
+    ]
+  },
+  "stream": true
+}
+
+### Chat - Complex conversation
+POST {{baseUrl}}/chat
+Content-Type: application/json
+
+{
+  "message": "What's 2+2?",
+  "history": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a math tutor that explains concepts clearly."
+      },
+      {
+        "role": "user",
+        "content": "I need help with basic math"
+      },
+      {
+        "role": "assistant",
+        "content": "I'd be happy to help you with basic math! What would you like to learn?"
+      }
+    ]
+  },
+  "stream": false
+}

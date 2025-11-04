@@ -1,0 +1,130 @@
+### Backend API Tests
+### Make sure the backend is running on http://localhost:5000
+
+@baseUrl = http://localhost:5000
+@apiUrl = {{baseUrl}}/api
+
+###############################################################################
+# Health Check
+###############################################################################
+
+### Get health status
+GET {{baseUrl}}/health HTTP/1.1
+
+###############################################################################
+# Chat API - Non-Streaming
+###############################################################################
+
+### Simple chat message (non-streaming)
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Hello! What is Azure?",
+  "stream": false
+}
+
+### Chat with history (non-streaming)
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Can you tell me more about that?",
+  "history": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is Azure?"
+      },
+      {
+        "role": "assistant",
+        "content": "Azure is Microsoft's cloud computing platform."
+      }
+    ]
+  },
+  "stream": false
+}
+
+###############################################################################
+# Chat API - Streaming (Server-Sent Events)
+###############################################################################
+
+### Simple chat message (streaming)
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Tell me a short story about a robot",
+  "stream": true
+}
+
+### Chat with history (streaming)
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "What happened next?",
+  "history": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Tell me a story"
+      },
+      {
+        "role": "assistant",
+        "content": "Once upon a time, there was a brave knight..."
+      }
+    ]
+  },
+  "stream": true
+}
+
+###############################################################################
+# Error Cases
+###############################################################################
+
+### Empty message (should return 400)
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "",
+  "stream": false
+}
+
+### Missing message field (should return 400)
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "stream": false
+}
+
+###############################################################################
+# Test with different message roles
+###############################################################################
+
+### Chat with system message in history
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "What are the three laws?",
+  "history": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a helpful assistant that knows about robotics."
+      },
+      {
+        "role": "user",
+        "content": "Tell me about Asimov's laws"
+      },
+      {
+        "role": "assistant",
+        "content": "Isaac Asimov created the Three Laws of Robotics."
+      }
+    ]
+  },
+  "stream": false
+}

@@ -4,7 +4,8 @@ from typing import AsyncGenerator
 
 from azure.identity.aio import DefaultAzureCredential
 from semantic_kernel import Kernel
-from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
+from semantic_kernel.connectors.ai.open_ai import (
+    AzureChatCompletion, AzureChatPromptExecutionSettings)
 from semantic_kernel.contents import StreamingChatMessageContent
 
 from ..core.config import settings
@@ -19,15 +20,29 @@ class ChatAgentService:
         self.kernel = Kernel()
 
         # Configure Azure OpenAI chat completion service
-        # Using Managed Identity for authentication (best practice)
-        self.chat_service = AzureChatCompletion(
-            deployment_name=settings.azure_ai_model_deployment,
-            endpoint=settings.azure_ai_project_endpoint,
-            ad_token_provider=DefaultAzureCredential().get_token,
-        )
+        # Use API key if provided, otherwise use Managed Identity
+        if settings.azure_openai_api_key:
+            self.chat_service = AzureChatCompletion(
+                deployment_name=settings.azure_ai_model_deployment,
+                endpoint=settings.azure_ai_project_endpoint,
+                api_key=settings.azure_openai_api_key,
+            )
+        else:
+            # Use Managed Identity (best practice for production)
+            self.chat_service = AzureChatCompletion(
+                deployment_name=settings.azure_ai_model_deployment,
+                endpoint=settings.azure_ai_project_endpoint,
+                ad_token_provider=DefaultAzureCredential().get_token,
+            )
 
         # Add the service to the kernel
         self.kernel.add_service(self.chat_service)
+        # Default execution settings
+        self.execution_settings = AzureChatPromptExecutionSettings(
+            temperature=0.7,
+            top_p=0.95,
+            max_tokens=800,
+        )
 
         # System instructions for the agent
         self.system_message = """You are a helpful AI assistant.
@@ -62,7 +77,9 @@ You are friendly and professional in your interactions."""
         # Stream the response
         response_text = ""
         async for chunk in self.chat_service.get_streaming_chat_message_contents(
-            chat_history=sk_history, settings=None, kernel=self.kernel
+            chat_history=sk_history,
+            settings=self.execution_settings,
+            kernel=self.kernel,
         ):
             if isinstance(chunk, StreamingChatMessageContent):
                 if chunk.content:
@@ -100,14 +117,25 @@ You are friendly and professional in your interactions."""
 
         # Get response
         response = await self.chat_service.get_chat_message_contents(
-            chat_history=sk_history, settings=None, kernel=self.kernel
+            chat_history=sk_history,
+            settings=self.execution_settings,
+            kernel=self.kernel,
         )
 
         # Extract response text
         response_text = ""
         if response and len(response) > 0:
-            response_text = str(response[0])
-            sk_history.add_assistant_message(response_text)
+            # Get the content from the chat message
+            first_message = response[0]
+            if hasattr(first_message, "content") and first_message.content:
+                if isinstance(first_message.content, str):
+                    response_text = first_message.content
+                else:
+                    response_text = str(first_message.content)
+
+            # Add to history if we got a response
+            if response_text:
+                sk_history.add_assistant_message(response_text)
 
         # Convert back to API model
         updated_history = sk_to_chat_history(sk_history)
