@@ -1,14 +1,33 @@
 """Main FastAPI application."""
 
+import logging
+import os
+
 from app.core.config import settings
 from app.core.lifespan import lifespan
-from app.core.tracing import setup_tracing
+from app.core.telemetry import setup_telemetry
 from app.routers import chat, health
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-# Set up OpenTelemetry tracing if enabled
-setup_tracing()
+# Configure Python logging
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
+# Suppress verbose loggers from Azure SDK, httpx, and Semantic Kernel
+logging.getLogger(
+    "azure.core.pipeline.policies.http_logging_policy"
+).setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("semantic_kernel").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("opentelemetry").setLevel(logging.ERROR)
+
+# Set up Application Insights telemetry
+setup_telemetry()
 
 # Create FastAPI app
 app = FastAPI(
@@ -35,10 +54,13 @@ if __name__ == "__main__":
     import uvicorn
 
     # When running locally with: uv run python main.py
+    port = int(os.getenv("PORT", "8000"))
+    log_level = os.getenv("LOG_LEVEL", settings.log_level).lower()
+
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=port,
         reload=True,
-        log_level=settings.log_level.lower(),
+        log_level=log_level,
     )

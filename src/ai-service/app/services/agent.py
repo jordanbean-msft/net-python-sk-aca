@@ -1,15 +1,22 @@
 """Chat agent service using Semantic Kernel."""
 
+import logging
 from typing import AsyncGenerator
 
 from azure.identity.aio import DefaultAzureCredential
 from semantic_kernel import Kernel
+from semantic_kernel.connectors.ai.function_choice_behavior import \
+    FunctionChoiceBehavior
 from semantic_kernel.connectors.ai.open_ai import (
     AzureChatCompletion, AzureChatPromptExecutionSettings)
-from semantic_kernel.contents import StreamingChatMessageContent
+from semantic_kernel.contents import (FunctionCallContent,
+                                      StreamingChatMessageContent)
 
 from ..core.config import settings
 from ..models import ChatHistoryModel, chat_history_to_sk, sk_to_chat_history
+from ..plugins import WeatherPlugin
+
+logger = logging.getLogger(__name__)
 
 
 class ChatAgentService:
@@ -37,17 +44,23 @@ class ChatAgentService:
 
         # Add the service to the kernel
         self.kernel.add_service(self.chat_service)
-        # Default execution settings
+
+        # Register weather plugin
+        self.kernel.add_plugin(WeatherPlugin(), plugin_name="weather")
+
+        # Default execution settings with function calling enabled
         self.execution_settings = AzureChatPromptExecutionSettings(
             temperature=0.7,
             top_p=0.95,
             max_tokens=800,
+            function_choice_behavior=FunctionChoiceBehavior.Auto(),
         )
 
         # System instructions for the agent
         self.system_message = """You are a helpful AI assistant.
 You provide clear, accurate, and concise responses to user questions.
-You are friendly and professional in your interactions."""
+You are friendly and professional in your interactions.
+You have access to a weather tool that can provide current weather information for any location."""
 
     async def stream_chat_completion(
         self,
@@ -76,16 +89,41 @@ You are friendly and professional in your interactions."""
 
         # Stream the response
         response_text = ""
+        logger.info("Starting streaming for message: %s", user_message)
+        chunk_count = 0
         async for chunk in self.chat_service.get_streaming_chat_message_contents(
             chat_history=sk_history,
             settings=self.execution_settings,
             kernel=self.kernel,
         ):
+            chunk_count += 1
+            # Semantic Kernel returns a list, get the first item
+            if isinstance(chunk, list) and len(chunk) > 0:
+                chunk = chunk[0]
+
             if isinstance(chunk, StreamingChatMessageContent):
+                # Check for function/tool calls in the chunk
+                if hasattr(chunk, 'items') and chunk.items:
+                    for item in chunk.items:
+                        if isinstance(item, FunctionCallContent):
+                            # Only log complete function calls
+                            if item.name:
+                                logger.info(
+                                    "LLM requested tool call: "
+                                    "function='%s', plugin='%s', arguments=%s",
+                                    item.name,
+                                    getattr(item, 'plugin_name', 'N/A'),
+                                    item.arguments
+                                )
+
                 if chunk.content:
                     response_text += chunk.content
                     yield chunk.content
 
+        logger.debug(
+            "Streaming complete. Total text: %d chars",
+            len(response_text)
+        )
         # Add assistant's response to history
         if response_text:
             sk_history.add_assistant_message(response_text)
@@ -127,6 +165,19 @@ You are friendly and professional in your interactions."""
         if response and len(response) > 0:
             # Get the content from the chat message
             first_message = response[0]
+
+            # Check for function/tool calls in the response
+            if hasattr(first_message, 'items') and first_message.items:
+                for item in first_message.items:
+                    if isinstance(item, FunctionCallContent):
+                        logger.info(
+                            "LLM requested tool call: "
+                            "function='%s', plugin='%s', arguments=%s",
+                            item.name,
+                            getattr(item, 'plugin_name', 'N/A'),
+                            item.arguments
+                        )
+
             if hasattr(first_message, "content") and first_message.content:
                 if isinstance(first_message.content, str):
                     response_text = first_message.content

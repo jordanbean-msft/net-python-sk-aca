@@ -1,5 +1,12 @@
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure Kestrel to use PORT from environment variable
+var port = builder.Configuration["PORT"] ?? "8080";
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+  serverOptions.ListenAnyIP(int.Parse(port));
+});
+
 // Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

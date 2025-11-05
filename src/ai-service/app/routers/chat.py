@@ -1,10 +1,14 @@
 """Chat endpoints."""
 
+import logging
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from ..core.dependencies import AgentServiceDep
 from ..models import ChatRequest, ChatResponse
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -29,15 +33,20 @@ async def chat_stream(
     async def generate_stream():
         """Generate SSE stream of chat responses."""
         try:
+            chunk_count = 0
             async for chunk in agent_service.stream_chat_completion(
                 request.message, request.history
             ):
+                chunk_count += 1
+                logger.debug("Streaming chunk %d: %r", chunk_count, chunk)
                 # Format as Server-Sent Events
                 yield f"data: {chunk}\n\n"
             # Send completion marker
+            logger.info("Stream complete, sent %d chunks", chunk_count)
             yield "data: [DONE]\n\n"
         except Exception as e:
             # Send error in SSE format
+            logger.error("Stream error: %s", e, exc_info=True)
             yield f"data: [ERROR: {str(e)}]\n\n"
 
     return StreamingResponse(
@@ -72,8 +81,7 @@ async def chat(request: ChatRequest, agent_service: AgentServiceDep):
         )
         return ChatResponse(response=response_text, history=updated_history)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
+        logger.exception("Error processing chat request")
         raise HTTPException(
             status_code=500, detail=f"Error processing chat request: {str(e)}"
         ) from e

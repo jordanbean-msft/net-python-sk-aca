@@ -15,13 +15,15 @@ class Settings(BaseSettings):
     # Application settings
     app_name: str = "AI Chat Service"
     log_level: str = "INFO"
+    port: int = 8000
 
     # CORS settings
     cors_origins: list[str] | str = ["*"]
 
     # Tracing settings
     enable_tracing: bool = True
-    otlp_endpoint: str = "http://localhost:4318/v1/traces"
+    otlp_endpoint: str | None = None
+    applicationinsights_connection_string: str | None = None
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -1,0 +1,223 @@
+.chat-container {
+  max-width: 500px;
+  margin: 40px auto;
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: #f7f8fa;
+  border-radius: 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  padding: 24px;
+}
+
+.chat-title {
+  text-align: center;
+  color: #2d3748;
+  margin-bottom: 24px;
+}
+
+.messages-container {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 220px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.empty-state {
+  color: #a0aec0;
+  text-align: center;
+  margin-top: 40px;
+}
+
+.message-wrapper {
+  display: flex;
+  margin-bottom: 10px;
+}
+
+.message-wrapper.user {
+  justify-content: flex-end;
+}
+
+.message-wrapper.assistant,
+.message-wrapper.system {
+  justify-content: flex-start;
+}
+
+.message-bubble {
+  max-width: 80%;
+  padding: 10px 16px;
+  border-radius: 18px;
+}
+
+.message-bubble.user {
+  background: #3182ce;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(49, 130, 206, 0.08);
+}
+
+.message-bubble.assistant {
+  background: #edf2f7;
+  color: #2d3748;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* Markdown formatting inside messages */
+.message-bubble p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.message-bubble p + p {
+  margin-top: 0.5em;
+}
+
+.message-bubble code {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: "Consolas", "Monaco", monospace;
+  font-size: 0.9em;
+}
+
+.message-bubble.user code {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.message-bubble pre {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.message-bubble.user pre {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.message-bubble pre code {
+  background: none;
+  padding: 0;
+}
+
+.message-bubble ul,
+.message-bubble ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.message-bubble li {
+  margin: 4px 0;
+}
+
+.message-bubble strong {
+  font-weight: 600;
+}
+
+.message-bubble em {
+  font-style: italic;
+}
+
+.message-bubble blockquote {
+  border-left: 3px solid rgba(0, 0, 0, 0.2);
+  padding-left: 12px;
+  margin: 8px 0;
+  font-style: italic;
+}
+
+.message-bubble.user blockquote {
+  border-left-color: rgba(255, 255, 255, 0.4);
+}
+
+.message-bubble h1,
+.message-bubble h2,
+.message-bubble h3,
+.message-bubble h4,
+.message-bubble h5,
+.message-bubble h6 {
+  margin: 12px 0 8px 0;
+  font-weight: 600;
+}
+
+.message-bubble h1 { font-size: 1.5em; }
+.message-bubble h2 { font-size: 1.3em; }
+.message-bubble h3 { font-size: 1.1em; }
+
+.message-bubble.system {
+  background: #feb2b2;
+  color: #2d3748;
+  font-weight: bold;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.typing-indicator {
+  color: #718096;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.chat-form {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 16px;
+  border: 1px solid #cbd5e0;
+  font-size: 16px;
+  outline: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  background: #fff;
+}
+
+.chat-input:disabled {
+  background: #f1f5f9;
+}
+
+.send-button {
+  padding: 0 24px;
+  border-radius: 16px;
+  background: #3182ce;
+  color: #fff;
+  font-weight: bold;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(49, 130, 206, 0.08);
+}
+
+.send-button:disabled {
+  background: #cbd5e0;
+  cursor: not-allowed;
+}
+
+.streaming-toggle {
+  margin-top: 12px;
+  text-align: center;
+}
+
+.streaming-toggle label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #4a5568;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.streaming-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.streaming-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

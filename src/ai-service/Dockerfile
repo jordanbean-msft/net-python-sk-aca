@@ -4,6 +4,11 @@ FROM python:3.12-slim AS base
 # Set working directory
 WORKDIR /app
 
+# Install system dependencies including curl for health checks
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends curl && \
+  rm -rf /var/lib/apt/lists/*
+
 # Install uv for fast Python package management
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
@@ -26,12 +31,17 @@ RUN useradd -m -u 1000 appuser && \
 
 USER appuser
 
-# Expose port
-EXPOSE 8000
+# Expose port (configurable via PORT environment variable)
+ARG PORT=8000
+EXPOSE ${PORT}
 
-# Health check
+# Set default environment variables
+ENV PORT=${PORT} \
+  LOG_LEVEL=info
+
+# Health check (uses PORT environment variable at runtime)
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+  CMD curl -f http://localhost:${PORT}/health || exit 1
 
-# Run the application directly (packages already installed in system Python)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run the application (port and log level configurable via environment variables)
+CMD sh -c "uvicorn main:app --host 0.0.0.0 --port ${PORT} --log-level ${LOG_LEVEL}"

@@ -43,8 +43,12 @@ public class ChatController : ControllerBase
 
       _logger.LogInformation("Sending chat request to Python API: {Message}", request.Message);
 
+      // Choose endpoint based on streaming preference
+      var endpoint = request.Stream ? "/api/chat/stream" : "/api/chat";
+      _logger.LogInformation("Stream flag: {Stream}, using endpoint: {Endpoint}", request.Stream, endpoint);
+
       // Make request to Python API
-      var response = await httpClient.PostAsync("/api/chat", content, cancellationToken);
+      var response = await httpClient.PostAsync(endpoint, content, cancellationToken);
 
       if (!response.IsSuccessStatusCode)
       {

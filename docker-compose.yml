@@ -5,13 +5,25 @@ services:
     build:
       context: ./src
       dockerfile: backend/Dockerfile
+      args:
+        BUILD_ENV: development
+        PORT: 8080
     ports:
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - PythonApiUrl=http://ai-service:8000
+      - Logging__LogLevel__Default=Debug
+      - PORT=8080
     depends_on:
-      - ai-service
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - chatnet
 
@@ -19,12 +31,46 @@ services:
     build:
       context: ./src/ai-service
       dockerfile: Dockerfile
+      args:
+        PORT: 8000
     ports:
       - "8000:8000"
     env_file:
       - ./src/ai-service/.env
     environment:
       - PYTHONUNBUFFERED=1
+      - WeatherFunctionUrl=http://weather-function:80
+      - PORT=8000
+      - LOG_LEVEL=debug
+    depends_on:
+      weather-function:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - chatnet
+
+  weather-function:
+    build:
+      context: ./src/weather-function
+      dockerfile: Dockerfile
+    ports:
+      - "7071:80"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - AzureFunctionsJobHost__logging__logLevel__default=Information
+      - AzureFunctionsJobHost__logging__logLevel__Function=Information
+      - AzureFunctionsJobHost__logging__console__isEnabled=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
     networks:
       - chatnet
 
