@@ -41,15 +41,6 @@ module "app_insights" {
   tags                = local.base_tags
 }
 
-module "ai_storage" {
-  source              = "./modules/ai-storage"
-  unique_suffix       = local.unique_suffix
-  resource_group_name = var.resource_group_name
-  location            = var.location
-  subscription_id     = var.subscription_id
-  tags                = local.base_tags
-}
-
 module "ai_foundry" {
   source                     = "./modules/ai-foundry"
   unique_suffix              = local.unique_suffix
@@ -58,26 +49,16 @@ module "ai_foundry" {
   subscription_id            = var.subscription_id
   log_analytics_workspace_id = module.log_analytics.id
   tags                       = local.base_tags
-
-  depends_on = [module.ai_storage]
 }
 
 module "ai_project" {
-  source                                = "./modules/ai-project"
-  unique_suffix                         = local.unique_suffix
-  resource_group_name                   = var.resource_group_name
-  location                              = var.location
-  ai_foundry_id                         = module.ai_foundry.ai_foundry_id
-  ai_foundry_ready                      = module.ai_foundry.ai_foundry_ready
-  storage_account_id                    = module.ai_storage.storage_account_id
-  storage_account_name                  = module.ai_storage.storage_account_name
-  storage_account_primary_blob_endpoint = module.ai_storage.storage_account_primary_blob_endpoint
-  cosmosdb_id                           = module.ai_storage.cosmosdb_id
-  cosmosdb_name                         = module.ai_storage.cosmosdb_name
-  cosmosdb_endpoint                     = module.ai_storage.cosmosdb_endpoint
-  ai_search_id                          = module.ai_storage.ai_search_id
-  ai_search_name                        = module.ai_storage.ai_search_name
-  tags                                  = local.base_tags
+  source              = "./modules/ai-project"
+  unique_suffix       = local.unique_suffix
+  resource_group_name = var.resource_group_name
+  location            = var.location
+  ai_foundry_id       = module.ai_foundry.ai_foundry_id
+  ai_foundry_ready    = module.ai_foundry.ai_foundry_ready
+  tags                = local.base_tags
 
   depends_on = [module.ai_foundry]
 }

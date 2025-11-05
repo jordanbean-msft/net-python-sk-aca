@@ -38,38 +38,3 @@ resource "time_sleep" "wait_project_identities" {
   create_duration = "30s"
 }
 
-resource "azurerm_role_assignment" "cosmosdb_operator" {
-  depends_on = [
-    time_sleep.wait_project_identities
-  ]
-  scope                = var.cosmosdb_id
-  role_definition_name = "Cosmos DB Operator"
-  principal_id         = azapi_resource.ai_foundry_project.output.identity.principalId
-}
-
-resource "azurerm_role_assignment" "storage_blob_contributor" {
-  depends_on = [
-    time_sleep.wait_project_identities
-  ]
-  scope                = var.storage_account_id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azapi_resource.ai_foundry_project.output.identity.principalId
-}
-
-resource "azurerm_role_assignment" "search_index_contributor" {
-  depends_on = [
-    time_sleep.wait_project_identities
-  ]
-  scope                = var.ai_search_id
-  role_definition_name = "Search Index Data Contributor"
-  principal_id         = azapi_resource.ai_foundry_project.output.identity.principalId
-}
-
-resource "azurerm_role_assignment" "search_service_contributor" {
-  depends_on = [
-    time_sleep.wait_project_identities
-  ]
-  scope                = var.ai_search_id
-  role_definition_name = "Search Service Contributor"
-  principal_id         = azapi_resource.ai_foundry_project.output.identity.principalId
-}
