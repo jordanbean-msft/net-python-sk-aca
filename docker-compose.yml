@@ -8,6 +8,7 @@ services:
       args:
         BUILD_ENV: development
         PORT: 8080
+      target: development
     ports:
       - "8080:8080"
     environment:

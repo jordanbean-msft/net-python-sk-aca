@@ -1,9 +1,10 @@
+# Build argument to control build strategy
+ARG BUILD_ENV=production
+
 # Node build stage for React frontend
 FROM node:18-alpine AS frontend-build
+ARG BUILD_ENV
 WORKDIR /frontend
-
-# Build argument to control optimization
-ARG BUILD_ENV=production
 
 # Copy package.json first for better caching
 COPY frontend/package.json ./
@@ -25,16 +26,47 @@ RUN if [ "$BUILD_ENV" = "development" ]; then \
   npm run build; \
   fi
 
-## Backend build stage (dotnet publish inside container)
+## Backend build stage (dotnet publish inside container) - only for production
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend-build
+ARG BUILD_ENV
 WORKDIR /src
 COPY backend/*.csproj ./
-RUN dotnet restore Backend.csproj
+RUN if [ "$BUILD_ENV" = "production" ]; then \
+  dotnet restore Backend.csproj; \
+  fi
 COPY backend/ ./
-RUN dotnet publish Backend.csproj -c Release -o /src/publish
+RUN if [ "$BUILD_ENV" = "production" ]; then \
+  dotnet publish Backend.csproj -c Release -o /src/publish; \
+  fi
 
-# Runtime stage
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+# Development runtime stage - SDK for local development
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS development
+WORKDIR /app
+
+# Install curl for health checks
+RUN apt-get update && \
+  apt-get install -y --no-install-recommends curl && \
+  rm -rf /var/lib/apt/lists/*
+
+# Copy React build from frontend stage
+COPY --from=frontend-build /frontend/build ./wwwroot
+
+# Copy backend source (for development, we'll use dotnet run)
+COPY backend/ ./
+
+# Expose port (configurable via PORT environment variable)
+ARG PORT=8080
+EXPOSE ${PORT}
+
+# Set environment variables
+ENV ASPNETCORE_URLS=http://+:${PORT}
+ENV PORT=${PORT}
+
+# Run with dotnet run for development (watches for changes if configured)
+CMD ["dotnet", "run", "--no-launch-profile"]
+
+# Production runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS production
 WORKDIR /app
 
 # Install curl for health checks
