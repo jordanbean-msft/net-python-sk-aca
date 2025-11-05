@@ -117,12 +117,28 @@ This is a multi-tier chat application with the following architecture:
 
 ### Infrastructure as Code (Terraform)
 
-- Use Terraform for all Azure infrastructure
-- Deploy to Azure Container Apps
-- Provision separate container apps for C# and Python services
-- Configure Azure AI Foundry resources for the agent
-- Set up networking, environment variables, and secrets
-- Include container registry configuration
+- Use Terraform for all Azure infrastructure.
+- Prefer a modular structure: EACH module must contain exactly four files: `versions.tf`, `variables.tf`, `main.tf`, `outputs.tf`.
+  - `versions.tf`: declare required providers (no need to pin versions if root pins them).
+  - `variables.tf`: define all inputs (no inline variable blocks in `main.tf`).
+  - `main.tf`: resources only (no variable or output blocks).
+  - `outputs.tf`: all outputs (no outputs left in `main.tf`).
+- Root module (`infra/main.tf`) should ONLY consume child modules—avoid direct resource definitions unless explicitly required for one‑off items.
+- Random/unique suffix generation lives in a dedicated `foundation` module; other modules consume its output.
+- Container Apps pattern: separate modules for environment, generic container app (instantiated per service), identity, and ACR.
+- Secrets must be passed using module maps (e.g., `secret_env_vars`) and rendered as Container App secrets, NEVER hardcoded.
+- Conditional resource creation (e.g., existing Log Analytics / App Insights) handled with a `create` boolean in each module rather than count logic scattered in root.
+- No private networking/VNet integration unless explicitly requested; default to public backend ingress and internal-only ingress for supporting services.
+- Diagnostic settings belong either in their own module or explicitly in root—do not duplicate inside resource modules.
+- Naming: use `unique_suffix` from foundation for global uniqueness; keep names short, lowercase, and consistent (e.g., `acr${suffix}`, `ca-backend-${suffix}`).
+- All modules must be idempotent and avoid referencing resources that may not exist (guard with `create` flags).
+- Avoid data sources for simple interpolations; prefer passing IDs directly via module outputs.
+- Use locals in root for tag merging and derived settings (e.g., connection strings) rather than recomputing inside modules.
+- Never put provider blocks inside modules beyond `versions.tf`; root controls provider configuration and aliases.
+- Outputs exposed in root should reference module outputs—not underlying resources—to preserve encapsulation.
+- Plan for future expansion (e.g., Key Vault, private networking) by keeping module interfaces minimal and focused.
+- Enforce consistent variable naming: `resource_group_name`, `location`, `tags`, `unique_suffix`, `create`, `image`, `cpu`, `memory`, `min_replicas`, `max_replicas`.
+- Keep module logic free of business assumptions (e.g., no hard-coded environment variables beyond structural ones; pass all env/secret maps from root).
 
 ### Azure Resources
 
@@ -183,3 +199,14 @@ This is a multi-tier chat application with the following architecture:
 - Ensure proper error handling in the request chain
 - Configure CORS appropriately between services
 - Use environment variables for configuration (API endpoints, Azure credentials)
+- Terraform Generation Checklist:
+  1. Create/maintain required module files (`versions.tf`, `variables.tf`, `main.tf`, `outputs.tf`).
+  2. Do NOT inline variables or outputs in `main.tf`.
+  3. Use a foundation module for unique suffixes—never duplicate random generators in other modules.
+  4. Container Apps: use a generic module; root instantiates one per service (backend, ai-service, weather-function).
+  5. Secrets: pass via `secret_env_vars` map; expose only necessary identifiers as outputs.
+  6. No private networking unless specifically requested.
+  7. All environment variables go through module maps; avoid hardcoding dynamic URLs (construct using module outputs in root).
+  8. Validate with `terraform init && terraform validate` after structural changes.
+  9. Keep provider version pinning centralized in root `versions.tf`.
+  10. Prefer module outputs in root outputs; never couple root to internal resource names.

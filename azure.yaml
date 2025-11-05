@@ -1,2 +1,40 @@
-name: template-repository
+name: net-python-sk-aca
+metadata:
+  template: net-python-sk-aca@1.0.0
+
+infra:
+  provider: terraform
+  path: infra
+
 services:
+  backend:
+    project: ./src/backend
+    language: csharp
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+      context: ../
+      remoteBuild: true
+
+  ai-service:
+    project: ./src/ai-service
+    language: python
+    host: containerapp
+    docker:
+      path: ./Dockerfile
+      context: .
+      remoteBuild: true
+
+  weather-function:
+    project: ./src/weather-function
+    language: python
+    host: function
+
+# Use the new azd publish command for container workflows
+workflows:
+  up:
+    steps:
+      - azd: provision
+      - azd: package --all
+      - azd: publish --all
+      - azd: deploy --all

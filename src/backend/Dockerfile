@@ -25,6 +25,14 @@ RUN if [ "$BUILD_ENV" = "development" ]; then \
   npm run build; \
   fi
 
+## Backend build stage (dotnet publish inside container)
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend-build
+WORKDIR /src
+COPY backend/*.csproj ./
+RUN dotnet restore Backend.csproj
+COPY backend/ ./
+RUN dotnet publish Backend.csproj -c Release -o /src/publish
+
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
@@ -34,8 +42,8 @@ RUN apt-get update && \
   apt-get install -y --no-install-recommends curl && \
   rm -rf /var/lib/apt/lists/*
 
-# Copy pre-built backend app
-COPY backend/publish/ .
+# Copy published backend from build stage
+COPY --from=backend-build /src/publish/ .
 
 # Copy React build from frontend stage
 COPY --from=frontend-build /frontend/build ./wwwroot

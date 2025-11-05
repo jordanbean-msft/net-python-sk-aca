@@ -1,3 +1,23 @@
+# Frontend build artifacts (context includes ../frontend)
+**/node_modules/
+**/build/
+**/.cache/
+**/coverage/
+**/dist/
+
+# Git and version control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation and misc
+*.md
+README*
+LICENSE
+.editorconfig
+.dockerignore
+
+# Backend build artifacts
 bin/
 obj/
 *.user

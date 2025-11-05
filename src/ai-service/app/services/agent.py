@@ -3,7 +3,8 @@
 import logging
 from typing import AsyncGenerator
 
-from azure.identity.aio import DefaultAzureCredential
+from azure.identity.aio import (DefaultAzureCredential,
+                                get_bearer_token_provider)
 from semantic_kernel import Kernel
 from semantic_kernel.connectors.ai.function_choice_behavior import \
     FunctionChoiceBehavior
@@ -36,10 +37,15 @@ class ChatAgentService:
             )
         else:
             # Use Managed Identity (best practice for production)
+            credential = DefaultAzureCredential()
+            token_provider = get_bearer_token_provider(
+                credential,
+                "https://cognitiveservices.azure.com/.default"
+            )
             self.chat_service = AzureChatCompletion(
                 deployment_name=settings.azure_ai_model_deployment,
                 endpoint=settings.azure_ai_project_endpoint,
-                ad_token_provider=DefaultAzureCredential().get_token,
+                ad_token_provider=token_provider,
             )
 
         # Add the service to the kernel
