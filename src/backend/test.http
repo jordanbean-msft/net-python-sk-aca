@@ -1,5 +1,6 @@
 ### Backend API Tests
 ### Make sure the backend is running on http://localhost:8080
+### Tests the C# backend proxy to Python AI service with multi-agent orchestration
 
 @baseUrl = http://localhost:8080
 @apiUrl = {{baseUrl}}/api
@@ -12,33 +13,194 @@
 GET {{baseUrl}}/api/health HTTP/1.1
 
 ###############################################################################
-# Chat API - Non-Streaming
+# Weather Queries - Testing Agent Handoff & Tool Calling
 ###############################################################################
 
-### Simple chat message (non-streaming)
+### Weather Query - Houston (Non-streaming)
+# Flow: C# Backend -> Python AI Service -> CoordinatorAgent -> QueryAgent -> Weather Tool
 POST {{apiUrl}}/chat HTTP/1.1
 Content-Type: application/json
 
 {
-  "message": "Hello! What is Azure?",
+  "message": "What is the weather in Houston, TX?",
   "stream": false
 }
 
-### Chat with history (non-streaming)
+### Weather Query - Seattle (Streaming)
+# Tests SSE streaming from C# proxy
 POST {{apiUrl}}/chat HTTP/1.1
 Content-Type: application/json
 
 {
-  "message": "Can you tell me more about that?",
+  "message": "What's the weather like in Seattle?",
+  "stream": true
+}
+
+### Weather Query - Multiple Cities (Non-streaming)
+# Should trigger multiple weather tool calls
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Can you tell me the weather in New York, Los Angeles, and Miami?",
+  "stream": false
+}
+
+### Weather Query - Natural Language (Streaming)
+# Tests natural language weather queries with streaming
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "I'm planning a trip to Chicago tomorrow. How's the weather looking?",
+  "stream": true
+}
+
+### Weather Query - Decision Support
+# Tests weather query with additional reasoning
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Should I bring a jacket in San Francisco today?",
+  "stream": false
+}
+
+###############################################################################
+# General Conversation - Testing CoordinatorAgent Direct Response
+###############################################################################
+
+### Simple Greeting (Non-streaming)
+# Should be handled by CoordinatorAgent directly (no handoff to QueryAgent)
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Hello! How are you today?",
+  "stream": false
+}
+
+### General Knowledge Question (Non-streaming)
+# Should be handled by CoordinatorAgent directly
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "What is Semantic Kernel?",
+  "stream": false
+}
+
+### Programming Joke (Streaming)
+# Tests streaming for general conversation
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Tell me a funny programming joke",
+  "stream": true
+}
+
+### Azure Question (Streaming)
+# Tests longer responses with streaming
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Explain Azure Container Apps and when to use them",
+  "stream": true
+}
+
+###############################################################################
+# Conversation with History - Testing Context Awareness
+###############################################################################
+
+### Weather Follow-up Question
+# Tests context retention across messages
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "What about tomorrow?",
   "history": {
     "messages": [
       {
         "role": "user",
-        "content": "What is Azure?"
+        "content": "What is the weather in Boston?"
       },
       {
         "role": "assistant",
-        "content": "Azure is Microsoft's cloud computing platform."
+        "content": "The current weather in Boston is partly cloudy with a temperature of 72°F."
+      }
+    ]
+  },
+  "stream": false
+}
+
+### Mixed Conversation - Weather then General
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Thanks! Can you explain what a multi-agent system is?",
+  "history": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "What's the weather in Denver?"
+      },
+      {
+        "role": "assistant",
+        "content": "The current weather in Denver is partly cloudy with a temperature of 72°F."
+      }
+    ]
+  },
+  "stream": false
+}
+
+### General then Weather (Streaming)
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Actually, can you check the weather in Portland for me?",
+  "history": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello! What can you help me with?"
+      },
+      {
+        "role": "assistant",
+        "content": "Hello! I can help you with weather information and general questions. What would you like to know?"
+      }
+    ]
+  },
+  "stream": true
+}
+
+### Long Conversation History
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Compare the weather in both cities",
+  "history": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "What's the weather in Austin?"
+      },
+      {
+        "role": "assistant",
+        "content": "The current weather in Austin is partly cloudy with a temperature of 72°F."
+      },
+      {
+        "role": "user",
+        "content": "And what about Dallas?"
+      },
+      {
+        "role": "assistant",
+        "content": "The current weather in Dallas is partly cloudy with a temperature of 72°F."
       }
     ]
   },
@@ -46,44 +208,10 @@ Content-Type: application/json
 }
 
 ###############################################################################
-# Chat API - Streaming (Server-Sent Events)
+# Edge Cases & Error Handling
 ###############################################################################
 
-### Simple chat message (streaming)
-POST {{apiUrl}}/chat HTTP/1.1
-Content-Type: application/json
-
-{
-  "message": "Tell me a short story about a robot",
-  "stream": true
-}
-
-### Chat with history (streaming)
-POST {{apiUrl}}/chat HTTP/1.1
-Content-Type: application/json
-
-{
-  "message": "What happened next?",
-  "history": {
-    "messages": [
-      {
-        "role": "user",
-        "content": "Tell me a story"
-      },
-      {
-        "role": "assistant",
-        "content": "Once upon a time, there was a brave knight..."
-      }
-    ]
-  },
-  "stream": true
-}
-
-###############################################################################
-# Error Cases
-###############################################################################
-
-### Empty message (should return 400)
+### Empty Message (should return 400)
 POST {{apiUrl}}/chat HTTP/1.1
 Content-Type: application/json
 
@@ -92,7 +220,7 @@ Content-Type: application/json
   "stream": false
 }
 
-### Missing message field (should return 400)
+### Missing Message Field (should return 400)
 POST {{apiUrl}}/chat HTTP/1.1
 Content-Type: application/json
 
@@ -100,29 +228,69 @@ Content-Type: application/json
   "stream": false
 }
 
-###############################################################################
-# Test with different message roles
-###############################################################################
-
-### Chat with system message in history
+### Whitespace Only Message (should return 400)
 POST {{apiUrl}}/chat HTTP/1.1
 Content-Type: application/json
 
 {
-  "message": "What are the three laws?",
+  "message": "   ",
+  "stream": false
+}
+
+### Very Long Message (stress test)
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "Can you tell me the weather forecast for Houston, Dallas, Austin, San Antonio, El Paso, Fort Worth, Arlington, Corpus Christi, Plano, Laredo, Lubbock, Garland, Irving, Amarillo, Grand Prairie, Brownsville, McKinney, Frisco, Pasadena, Mesquite, Killeen, McAllen, Waco, Carrollton, Denton, Midland, Abilene, Beaumont, Round Rock, Odessa, Wichita Falls, Richardson, League City, Tyler, College Station, Pearland, San Angelo, Allen, League City, and Sugar Land in Texas?",
+  "stream": false
+}
+
+###############################################################################
+# Special Characters & Internationalization
+###############################################################################
+
+### City with Special Characters
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "What's the weather in São Paulo?",
+  "stream": false
+}
+
+### City with Accents
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "How's the weather in Montréal?",
+  "stream": false
+}
+
+###############################################################################
+# System Message Testing
+###############################################################################
+
+### Chat with Custom System Context
+POST {{apiUrl}}/chat HTTP/1.1
+Content-Type: application/json
+
+{
+  "message": "What's the weather in Phoenix?",
   "history": {
     "messages": [
       {
         "role": "system",
-        "content": "You are a helpful assistant that knows about robotics."
+        "content": "You are a travel advisor helping plan trips. Focus on weather and travel recommendations."
       },
       {
         "role": "user",
-        "content": "Tell me about Asimov's laws"
+        "content": "I want to visit Arizona"
       },
       {
         "role": "assistant",
-        "content": "Isaac Asimov created the Three Laws of Robotics."
+        "content": "Arizona is a beautiful destination! Let me help you plan your trip."
       }
     ]
   },
