@@ -1,0 +1,195 @@
+{
+  "folders": [
+    {
+      "name": "🏠 Root",
+      "path": "."
+    },
+    {
+      "name": "🌐 Frontend",
+      "path": "src/frontend"
+    },
+    {
+      "name": "🔧 Backend (C#)",
+      "path": "src/backend"
+    },
+    {
+      "name": "🤖 AI Service (Python)",
+      "path": "src/ai-service"
+    },
+    {
+      "name": "🌤️ Weather Function (Python)",
+      "path": "src/weather-function"
+    },
+    {
+      "name": "🏗️ Infrastructure (Terraform)",
+      "path": "infra"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/node_modules": true,
+      "**/bin": true,
+      "**/obj": true,
+      "**/__pycache__": true,
+      "**/.pytest_cache": true,
+      "**/.terraform": true,
+      "**/.venv": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/bin": true,
+      "**/obj": true,
+      "**/__pycache__": true,
+      "**/.terraform": true
+    },
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.black-formatter",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+      }
+    },
+    "[csharp]": {
+      "editor.formatOnSave": true
+    },
+    "[javascript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.formatOnSave": true
+    },
+    "[typescript]": {
+      "editor.defaultFormatter": "esbenp.prettier-vscode",
+      "editor.formatOnSave": true
+    },
+    "[terraform]": {
+      "editor.defaultFormatter": "hashicorp.terraform",
+      "editor.formatOnSave": true
+    },
+    "python.analysis.extraPaths": [
+      "${workspaceFolder:AI Service (Python)}/app"
+    ],
+    "python.testing.pytestEnabled": false,
+    "terraform.languageServer.enable": true,
+    "dotnet.defaultSolution": "src/backend/Backend.csproj"
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "ms-python.black-formatter",
+      "ms-dotnettools.csharp",
+      "ms-dotnettools.csdevkit",
+      "hashicorp.terraform",
+      "ms-azuretools.vscode-docker",
+      "ms-azuretools.vscode-azurefunctions",
+      "esbenp.prettier-vscode",
+      "dbaeumer.vscode-eslint",
+      "ms-vscode.azurecli",
+      "ms-azuretools.azure-dev"
+    ]
+  },
+  "launch": {
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": "🔧 Backend (.NET)",
+        "type": "coreclr",
+        "request": "launch",
+        "preLaunchTask": "build-backend",
+        "program": "${workspaceFolder:Backend (C#)}/bin/Debug/net8.0/Backend.dll",
+        "args": [],
+        "cwd": "${workspaceFolder:Backend (C#)}",
+        "stopAtEntry": false,
+        "env": {
+          "ASPNETCORE_ENVIRONMENT": "Development",
+          "PythonApiUrl": "http://localhost:8000"
+        }
+      },
+      {
+        "name": "🤖 AI Service (Python)",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "uvicorn",
+        "args": [
+          "main:app",
+          "--host",
+          "0.0.0.0",
+          "--port",
+          "8000",
+          "--reload"
+        ],
+        "cwd": "${workspaceFolder:AI Service (Python)}",
+        "env": {
+          "PYTHONUNBUFFERED": "1",
+          "LOG_LEVEL": "debug"
+        }
+      },
+      {
+        "name": "🐳 Docker Compose (Terminal)",
+        "type": "node-terminal",
+        "request": "launch",
+        "command": "docker-compose up --build",
+        "cwd": "${workspaceFolder:Root}"
+      }
+    ],
+    "compounds": []
+  },
+  "tasks": {
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "build-backend",
+        "command": "dotnet",
+        "type": "process",
+        "args": [
+          "build",
+          "${workspaceFolder:Backend (C#)}/Backend.csproj",
+          "/property:GenerateFullPaths=true",
+          "/consoleloggerparameters:NoSummary"
+        ],
+        "problemMatcher": "$msCompile"
+      },
+      {
+        "label": "build-frontend",
+        "type": "npm",
+        "script": "build",
+        "path": "src/frontend",
+        "problemMatcher": []
+      },
+      {
+        "label": "docker-compose-up",
+        "type": "shell",
+        "command": "docker-compose up --build",
+        "options": {
+          "cwd": "${workspaceFolder:Root}"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "docker-compose-down",
+        "type": "shell",
+        "command": "docker-compose down",
+        "options": {
+          "cwd": "${workspaceFolder:Root}"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "azd-up",
+        "type": "shell",
+        "command": "azd up",
+        "options": {
+          "cwd": "${workspaceFolder:Root}"
+        },
+        "problemMatcher": []
+      },
+      {
+        "label": "azd-deploy",
+        "type": "shell",
+        "command": "azd deploy --all",
+        "options": {
+          "cwd": "${workspaceFolder:Root}"
+        },
+        "problemMatcher": []
+      }
+    ]
+  }
+}

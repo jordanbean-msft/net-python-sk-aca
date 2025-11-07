@@ -27,6 +27,7 @@ RUN if [ "$BUILD_ENV" = "development" ]; then \
   fi
 
 ## Backend build stage (dotnet publish inside container) - only for production
+# Multi-arch .NET SDK image (arm64/x64). Actual arch selected by Docker platform settings.
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS backend-build
 ARG BUILD_ENV
 WORKDIR /src

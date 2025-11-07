@@ -2,6 +2,7 @@ version: "3.8"
 
 services:
   backend:
+    platform: linux/arm64
     build:
       context: ./src
       dockerfile: backend/Dockerfile
