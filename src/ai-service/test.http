@@ -10,7 +10,7 @@ GET {{baseUrl}}/health
 GET {{baseUrl}}/
 
 ### Chat - Non-streaming (Simple message)
-POST {{baseUrl}}/chat
+POST {{baseUrl}}/api/chat
 Content-Type: application/json
 
 {
@@ -19,7 +19,7 @@ Content-Type: application/json
 }
 
 ### Chat - Non-streaming (With conversation history)
-POST {{baseUrl}}/chat
+POST {{baseUrl}}/api/chat
 Content-Type: application/json
 
 {
@@ -44,7 +44,7 @@ Content-Type: application/json
 }
 
 ### Chat - Streaming
-POST {{baseUrl}}/chat/stream
+POST {{baseUrl}}/api/chat/stream
 Content-Type: application/json
 
 {
@@ -53,7 +53,7 @@ Content-Type: application/json
 }
 
 ### Chat - Streaming with history
-POST {{baseUrl}}/chat/stream
+POST {{baseUrl}}/api/chat/stream
 Content-Type: application/json
 
 {
@@ -74,7 +74,7 @@ Content-Type: application/json
 }
 
 ### Chat - Complex conversation
-POST {{baseUrl}}/chat
+POST {{baseUrl}}/api/chat
 Content-Type: application/json
 
 {

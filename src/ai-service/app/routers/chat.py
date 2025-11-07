@@ -14,9 +14,7 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 @router.post("/stream")
-async def chat_stream(
-    request: ChatRequest, agent_service: AgentServiceDep
-):
+async def chat_stream(request: ChatRequest, agent_service: AgentServiceDep):
     """
     Stream chat completion responses using Server-Sent Events (SSE).
 
@@ -76,9 +74,20 @@ async def chat(request: ChatRequest, agent_service: AgentServiceDep):
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     try:
-        response_text, updated_history = await agent_service.get_chat_completion(
-            request.message, request.history
+        logger.info("Chat request received | stream=%s", request.stream)
+        if request.history and request.history.messages:
+            logger.debug(
+                "History messages received: %s",
+                request.history.messages,
+            )
+        (
+            response_text,
+            updated_history,
+        ) = await agent_service.get_chat_completion(
+            request.message,
+            request.history,
         )
+        logger.info("Chat response length: %d", len(response_text))
         return ChatResponse(response=response_text, history=updated_history)
     except Exception as e:
         logger.exception("Error processing chat request")

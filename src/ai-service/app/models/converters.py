@@ -52,7 +52,15 @@ def sk_to_chat_history(sk_history: ChatHistory) -> ChatHistoryModel:
     history = ChatHistoryModel()
 
     for message in sk_history.messages:
-        role_str = str(message.role).lower()
+        role_obj = getattr(message, "role", None)
+
+        # Extract role name from Semantic Kernel AuthorRole enums
+        if role_obj is not None:
+            role_value = getattr(role_obj, "value", None)
+            role_source = role_value if role_value is not None else role_obj
+            role_str = str(role_source).lower()
+        else:
+            role_str = ""
 
         # Extract content - handle both strings and complex objects
         content = ""

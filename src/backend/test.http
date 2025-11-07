@@ -1,7 +1,7 @@
 ### Backend API Tests
-### Make sure the backend is running on http://localhost:5000
+### Make sure the backend is running on http://localhost:8080
 
-@baseUrl = http://localhost:5000
+@baseUrl = http://localhost:8080
 @apiUrl = {{baseUrl}}/api
 
 ###############################################################################
@@ -9,7 +9,7 @@
 ###############################################################################
 
 ### Get health status
-GET {{baseUrl}}/health HTTP/1.1
+GET {{baseUrl}}/api/health HTTP/1.1
 
 ###############################################################################
 # Chat API - Non-Streaming
