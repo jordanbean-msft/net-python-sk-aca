@@ -76,3 +76,25 @@ variable "startup_probe_failure_threshold" {
   description = "Failure threshold for startup probe"
   default     = 6
 }
+
+variable "dapr_app_id" {
+  type        = string
+  description = "Dapr application ID (mandatory)"
+}
+
+variable "dapr_app_port" {
+  type        = number
+  description = "Port that the application is listening on (mandatory)"
+}
+
+variable "dapr_log_level" {
+  type        = string
+  description = "Dapr log level (debug, info, warn, error)"
+  default     = "info"
+}
+
+variable "dapr_enable_api_logging" {
+  type        = bool
+  description = "Enable API logging for Dapr"
+  default     = false
+}

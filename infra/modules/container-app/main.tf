@@ -84,6 +84,12 @@ resource "azurerm_container_app" "main" {
     }
   }
 
+  dapr {
+    app_id       = var.dapr_app_id
+    app_port     = var.dapr_app_port
+    app_protocol = "http"
+  }
+
   ingress {
     external_enabled = var.external_enabled
     target_port      = var.target_port

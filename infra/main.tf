@@ -127,20 +127,24 @@ module "weather_function_app" {
 }
 
 module "ai_service" {
-  source               = "./modules/container-app"
-  name                 = "ca-ai-service-${local.unique_suffix}"
-  environment_id       = module.container_app_environment.id
-  resource_group_name  = var.resource_group_name
-  image                = coalesce(var.ai_service_image, "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest")
-  cpu                  = 0.5
-  memory               = "1Gi"
-  min_replicas         = 1
-  max_replicas         = 10
-  external_enabled     = false
-  target_port          = 8000
-  registry_server      = module.acr.login_server
-  registry_identity_id = module.identity.id
-  identity_ids         = [module.identity.id]
+  source                  = "./modules/container-app"
+  name                    = "ca-ai-service-${local.unique_suffix}"
+  environment_id          = module.container_app_environment.id
+  resource_group_name     = var.resource_group_name
+  image                   = coalesce(var.ai_service_image, "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest")
+  cpu                     = 0.5
+  memory                  = "1Gi"
+  min_replicas            = 1
+  max_replicas            = 10
+  external_enabled        = false
+  target_port             = 8000
+  registry_server         = module.acr.login_server
+  registry_identity_id    = module.identity.id
+  identity_ids            = [module.identity.id]
+  dapr_app_id             = "ai-service"
+  dapr_app_port           = 8000
+  dapr_log_level          = "info"
+  dapr_enable_api_logging = true
   env_vars = {
     PYTHONUNBUFFERED                      = "1"
     PORT                                  = "8000"
@@ -156,25 +160,29 @@ module "ai_service" {
 }
 
 module "backend" {
-  source               = "./modules/container-app"
-  name                 = "ca-backend-${local.unique_suffix}"
-  environment_id       = module.container_app_environment.id
-  resource_group_name  = var.resource_group_name
-  image                = coalesce(var.backend_image, "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest")
-  cpu                  = 0.5
-  memory               = "1Gi"
-  min_replicas         = 1
-  max_replicas         = 10
-  external_enabled     = true
-  target_port          = 8080
-  registry_server      = module.acr.login_server
-  registry_identity_id = module.identity.id
-  identity_ids         = [module.identity.id]
+  source                  = "./modules/container-app"
+  name                    = "ca-backend-${local.unique_suffix}"
+  environment_id          = module.container_app_environment.id
+  resource_group_name     = var.resource_group_name
+  image                   = coalesce(var.backend_image, "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest")
+  cpu                     = 0.5
+  memory                  = "1Gi"
+  min_replicas            = 1
+  max_replicas            = 10
+  external_enabled        = true
+  target_port             = 8080
+  registry_server         = module.acr.login_server
+  registry_identity_id    = module.identity.id
+  identity_ids            = [module.identity.id]
+  dapr_app_id             = "backend"
+  dapr_app_port           = 8080
+  dapr_log_level          = "info"
+  dapr_enable_api_logging = true
   env_vars = {
     PORT                       = "8080"
     ASPNETCORE_ENVIRONMENT     = "Production"
     Logging__LogLevel__Default = "Information"
-    PythonApiUrl               = "http://${module.ai_service.name}"
+    AiServiceAppId             = "ai-service"
   }
   tags = merge(local.base_tags, { azd-service-name = "backend" })
 }
