@@ -1,6 +1,6 @@
 # Multi-Container Chat Application with Azure AI Foundry
 
-![architecture](./.img/architecture.png)
+![architecture](./.img/architecture.drawio.png)
 
 A multi-tier chat application demonstrating Azure Container Apps, Azure Functions, and Azure AI Foundry integration with Semantic Kernel.
 
