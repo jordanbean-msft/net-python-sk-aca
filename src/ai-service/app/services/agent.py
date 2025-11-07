@@ -1,23 +1,19 @@
-"""Chat agent service using Semantic Kernel."""
+"""Multi-agent chat service using Semantic Kernel orchestration."""
 
 import logging
 from typing import AsyncGenerator
 
 from azure.identity.aio import DefaultAzureCredential, get_bearer_token_provider
 from semantic_kernel import Kernel
-from semantic_kernel.connectors.ai.function_choice_behavior import (
-    FunctionChoiceBehavior,
+from semantic_kernel.agents import (
+    ChatCompletionAgent,
+    HandoffOrchestration,
+    OrchestrationHandoffs,
 )
-from semantic_kernel.connectors.ai.open_ai import (
-    AzureChatCompletion,
-    AzureChatPromptExecutionSettings,
-)
-from semantic_kernel.contents import (
-    FunctionCallContent,
-    StreamingChatMessageContent,
-    TextContent,
-)
-from semantic_kernel.contents.chat_message_content import FinishReason
+from semantic_kernel.agents.runtime import InProcessRuntime
+from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
+from semantic_kernel.contents import ChatMessageContent
+from semantic_kernel.contents.utils.finish_reason import FinishReason
 
 from ..core.config import settings
 from ..models import ChatHistoryModel, chat_history_to_sk, sk_to_chat_history
@@ -27,12 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 class ChatAgentService:
-    """Manage Azure AI chat completions via Semantic Kernel."""
+    """Multi-agent orchestration service using Semantic Kernel."""
 
     def __init__(self):
-        """Initialize the chat agent service."""
-        self.kernel = Kernel()
-
+        """Initialize multi-agent chat with handoff orchestration."""
         # Configure Azure OpenAI chat completion service
         # Use API key if provided, otherwise use Managed Identity
         if settings.azure_openai_api_key:
@@ -53,28 +47,98 @@ class ChatAgentService:
                 ad_token_provider=token_provider,
             )
 
-        # Add the service to the kernel
-        self.kernel.add_service(self.chat_service)
+        # Create kernel for query agent with weather plugin
+        query_kernel = Kernel()
+        query_kernel.add_service(self.chat_service)
+        query_kernel.add_plugin(WeatherPlugin(), plugin_name="weather")
 
-        # Register weather plugin
-        self.kernel.add_plugin(WeatherPlugin(), plugin_name="weather")
+        # Get execution settings with function calling enabled
+        query_settings = query_kernel.get_prompt_execution_settings_from_service_id(
+            service_id=settings.azure_ai_model_deployment
+        )
+        from semantic_kernel.connectors.ai import FunctionChoiceBehavior
 
-        # Default execution settings with function calling enabled
-        self.execution_settings = AzureChatPromptExecutionSettings(
-            temperature=0.7,
-            top_p=0.95,
-            max_tokens=800,
-            function_choice_behavior=FunctionChoiceBehavior.Auto(),
+        query_settings.function_choice_behavior = FunctionChoiceBehavior.Auto()
+
+        # Create query agent with weather tool access
+        from semantic_kernel.functions import KernelArguments
+
+        self.query_agent = ChatCompletionAgent(
+            service=self.chat_service,
+            kernel=query_kernel,
+            name="QueryAgent",
+            instructions=(
+                "You are a query specialist agent that handles "
+                "weather information requests. "
+                "Use the weather tool to get current weather data "
+                "for any location the user asks about. "
+                "Provide clear, factual responses based on the "
+                "weather tool results. "
+                "When you have completed the weather query, use "
+                "complete_task to end with a summary."
+            ),
+            arguments=KernelArguments(settings=query_settings),
         )
 
-        # System instructions for the agent
+        # Create coordinator agent
+        coordinator_kernel = Kernel()
+        coordinator_kernel.add_service(self.chat_service)
+
+        # Get execution settings with function calling enabled
+        coordinator_settings = (
+            coordinator_kernel.get_prompt_execution_settings_from_service_id(
+                service_id=settings.azure_ai_model_deployment
+            )
+        )
+        coordinator_settings.function_choice_behavior = FunctionChoiceBehavior.Auto()
+
+        self.coordinator_agent = ChatCompletionAgent(
+            service=self.chat_service,
+            kernel=coordinator_kernel,
+            name="CoordinatorAgent",
+            instructions=(
+                "You are a helpful AI assistant that coordinates "
+                "user requests. "
+                "When users ask about weather information, transfer "
+                "to the QueryAgent using the transfer_to_QueryAgent function. "
+                "For general conversation, respond directly with "
+                "friendly, helpful answers and use complete_task "
+                "to end the conversation with a summary."
+            ),
+            arguments=KernelArguments(settings=coordinator_settings),
+        )
+
+        # Define handoff relationships using OrchestrationHandoffs
+        # CoordinatorAgent can handoff to QueryAgent
+        # QueryAgent can handoff back to CoordinatorAgent
+        self.handoffs = (
+            OrchestrationHandoffs()
+            .add(
+                self.coordinator_agent,
+                self.query_agent,
+                description="Transfer to QueryAgent for weather inquiries",
+            )
+            .add(
+                self.query_agent,
+                self.coordinator_agent,
+                description="Transfer back to CoordinatorAgent",
+            )
+        )
+
+        # Create the handoff orchestration
+        self.orchestration = HandoffOrchestration(
+            members=[self.coordinator_agent, self.query_agent],
+            handoffs=self.handoffs,
+        )
+
+        # Create and start runtime
+        self.runtime = InProcessRuntime()
+        self.runtime.start()
+
+        # System message for chat history initialization
         self.system_message = (
-            "You are a helpful AI assistant.\n"
-            "You provide clear, accurate, and concise responses to user"
-            " questions.\n"
-            "You are friendly and professional in your interactions.\n"
-            "You have access to a weather tool that can provide current"
-            " weather information for any location."
+            "You are a helpful AI assistant with access to "
+            "specialized agents for specific tasks like weather queries."
         )
 
     async def stream_chat_completion(
@@ -83,7 +147,7 @@ class ChatAgentService:
         chat_history: ChatHistoryModel | None = None,
     ) -> AsyncGenerator[str, None]:
         """
-        Stream chat completion responses from the Azure AI agent.
+        Stream chat completion using handoff orchestration.
 
         Args:
             user_message: The user's input message
@@ -102,64 +166,53 @@ class ChatAgentService:
         # Add user message to history
         sk_history.add_user_message(user_message)
 
-        # Stream the response
-        response_text = ""
-        logger.info("Starting streaming for message: %s", user_message)
-        chunk_count = 0
-        last_finish_reason: FinishReason | None = None
-        get_stream = self.chat_service.get_streaming_chat_message_contents
-        async for chunk in get_stream(
-            chat_history=sk_history,
-            settings=self.execution_settings,
-            kernel=self.kernel,
-        ):
-            chunk_count += 1
-            # Semantic Kernel returns a list, get the first item
-            if isinstance(chunk, list) and len(chunk) > 0:
-                chunk = chunk[0]
+        # Prepare task with history and current message
+        messages = []
+        for msg in sk_history.messages:
+            messages.append(msg)
 
-            if isinstance(chunk, StreamingChatMessageContent):
-                last_finish_reason = getattr(
-                    chunk,
-                    "finish_reason",
-                    last_finish_reason,
-                )
-                # Check for function/tool calls in the chunk
-                has_text_items = False
-                if hasattr(chunk, "items") and chunk.items:
-                    for item in chunk.items:
-                        if isinstance(item, FunctionCallContent):
-                            # Only log complete function calls
-                            if item.name:
-                                logger.info(
-                                    "LLM requested tool call: "
-                                    "function='%s', plugin='%s', arguments=%s",
-                                    item.name,
-                                    getattr(item, "plugin_name", "N/A"),
-                                    item.arguments,
-                                )
-                        if isinstance(item, TextContent) and item.text:
-                            logger.debug("Streaming text item: %r", item.text)
-                            response_text += item.text
-                            yield item.text
-                            has_text_items = True
+        logger.info("Starting handoff orchestration for: %s", user_message)
 
-                # Only yield chunk.content if no items were yielded
-                if chunk.content and not has_text_items:
-                    response_text += chunk.content
-                    yield chunk.content
+        # Invoke orchestration
+        orchestration_result = await self.orchestration.invoke(
+            task=messages,
+            runtime=self.runtime,
+        )
 
-        logger.debug("Streaming complete. Total text: %d chars", len(response_text))
-        if last_finish_reason == FinishReason.CONTENT_FILTER and not response_text:
-            logger.warning("Streaming completion blocked by content filter")
-            response_text = (
-                "I'm sorry, but I can't help with that request. "
-                "It may involve content that cannot be shared."
+        # Get the result
+        result = await orchestration_result.get(timeout=60)
+
+        # Extract response text
+        if isinstance(result, ChatMessageContent):
+            response_text = result.content or ""
+            # Check for content filter
+            if (
+                hasattr(result, "finish_reason")
+                and result.finish_reason == FinishReason.CONTENT_FILTER
+            ):
+                logger.warning("Chat blocked by content filter")
+                if not response_text:
+                    response_text = (
+                        "I'm sorry, but I can't help with that request. "
+                        "It may involve content that cannot be shared."
+                    )
+        elif isinstance(result, list):
+            response_text = " ".join(
+                str(msg.content) for msg in result if hasattr(msg, "content")
             )
-            yield response_text
-        # Add assistant's response to history
+        else:
+            response_text = str(result)
+
+        logger.debug("Handoff complete. Text: %d chars", len(response_text))
+
+        # Yield response text in chunks for streaming effect
         if response_text:
-            sk_history.add_assistant_message(response_text)
+            words = response_text.split()
+            for i, word in enumerate(words):
+                if i == 0:
+                    yield word
+                else:
+                    yield " " + word
 
     async def get_chat_completion(
         self,
@@ -167,7 +220,7 @@ class ChatAgentService:
         chat_history: ChatHistoryModel | None = None,
     ) -> tuple[str, ChatHistoryModel]:
         """
-        Get a non-streaming chat completion response.
+        Get non-streaming chat completion using handoff orchestration.
 
         Args:
             user_message: The user's input message
@@ -186,99 +239,47 @@ class ChatAgentService:
         # Add user message to history
         sk_history.add_user_message(user_message)
 
-        # Get response
-        response = await self.chat_service.get_chat_message_contents(
-            chat_history=sk_history,
-            settings=self.execution_settings,
-            kernel=self.kernel,
+        # Prepare task with history and current message
+        messages = []
+        for msg in sk_history.messages:
+            messages.append(msg)
+
+        logger.info("Invoking handoff orchestration for: %s", user_message)
+
+        # Invoke orchestration
+        orchestration_result = await self.orchestration.invoke(
+            task=messages,
+            runtime=self.runtime,
         )
 
+        # Get the result
+        result = await orchestration_result.get(timeout=60)
+
         # Extract response text
-        response_text = ""
-        if response and len(response) > 0:
-            # Get the content from the chat message
-            first_message = response[0]
-            logger.info(
-                "Received %d message(s) from chat service",
-                len(response),
+        if isinstance(result, ChatMessageContent):
+            response_text = result.content or ""
+            # Check for content filter
+            if (
+                hasattr(result, "finish_reason")
+                and result.finish_reason == FinishReason.CONTENT_FILTER
+            ):
+                logger.warning("Chat blocked by content filter")
+                if not response_text:
+                    response_text = (
+                        "I'm sorry, but I can't help with that "
+                        "request. It may involve content that "
+                        "cannot be shared."
+                    )
+        elif isinstance(result, list):
+            response_text = " ".join(
+                str(msg.content) for msg in result if hasattr(msg, "content")
             )
-            logger.debug("First message payload repr: %r", first_message)
-            logger.debug(
-                "First message fields: role=%s has_items=%s has_content=%s",
-                getattr(first_message, "role", None),
-                bool(getattr(first_message, "items", None)),
-                bool(getattr(first_message, "content", None)),
-            )
+        else:
+            response_text = str(result)
 
-            # Check for function/tool calls in the response
-            text_parts: list[str] = []
-            finish_reason = getattr(first_message, "finish_reason", None)
-            if finish_reason == FinishReason.CONTENT_FILTER:
-                filter_details = None
-                inner = getattr(first_message, "inner_content", None)
-                if inner and getattr(inner, "choices", None):
-                    filter_details = getattr(
-                        inner.choices[0],
-                        "content_filter_results",
-                        None,
-                    )
-                logger.warning(
-                    "Chat completion blocked by content filter: %s",
-                    filter_details,
-                )
-                response_text = (
-                    "I'm sorry, but I can't help with that request. "
-                    "It may involve content that cannot be shared."
-                )
-
-            if hasattr(first_message, "items") and first_message.items:
-                for item in first_message.items:
-                    logger.debug(
-                        "Response content item type=%s payload=%r",
-                        type(item),
-                        item,
-                    )
-                    if isinstance(item, FunctionCallContent):
-                        logger.info(
-                            "LLM requested tool call: "
-                            "function='%s', plugin='%s', arguments=%s",
-                            item.name,
-                            getattr(item, "plugin_name", "N/A"),
-                            item.arguments,
-                        )
-                    if isinstance(item, TextContent) and item.text:
-                        text_parts.append(item.text)
-
-            if hasattr(first_message, "content") and first_message.content:
-                if isinstance(first_message.content, str):
-                    response_text = first_message.content
-                else:
-                    logger.debug(
-                        "Non-string content type: %s",
-                        type(first_message.content),
-                    )
-                    # Some SDKs return content blocks such as TextContent
-                    if isinstance(first_message.content, list):
-                        for item in first_message.content:
-                            logger.debug(
-                                "Content item type=%s value=%r",
-                                type(item),
-                                item,
-                            )
-                            item_text = getattr(item, "text", None)
-                            if item_text:
-                                text_parts.append(item_text)
-
-                # Fallback to string conversion if we still have no text
-                if not response_text and not text_parts:
-                    response_text = str(first_message.content)
-
-            if not response_text and text_parts:
-                response_text = "".join(text_parts)
-
-            # Add to history if we got a response
-            if response_text:
-                sk_history.add_assistant_message(response_text)
+        # Add response to history
+        if response_text:
+            sk_history.add_assistant_message(response_text)
 
         # Convert back to API model
         updated_history = sk_to_chat_history(sk_history)
