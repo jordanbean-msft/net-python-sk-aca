@@ -1,0 +1,12 @@
+[project]
+name = "weather-function"
+version = "1.0.0"
+description = "Azure Function that returns hardcoded weather data for AI agent tool calls"
+requires-python = ">=3.12"
+dependencies = [
+    "azure-functions>=1.21.3",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"

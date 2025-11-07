@@ -1,0 +1,41 @@
+# This .dockerignore applies when context is the src directory
+# Prevents node_modules and other large artifacts from being sent to remote build
+
+# Frontend dependencies and build artifacts
+frontend/node_modules/
+frontend/build/
+frontend/.cache/
+frontend/coverage/
+frontend/dist/
+frontend/package-lock.json
+
+# AI service artifacts
+ai-service/__pycache__/
+ai-service/.pytest_cache/
+ai-service/.venv/
+ai-service/uv.lock
+ai-service/.ruff_cache/
+
+# Weather function artifacts
+weather-function/__pycache__/
+weather-function/.pytest_cache/
+weather-function/.venv/
+weather-function/.azure-functions-cache/
+weather-function/local.settings.json
+weather-function/host.json.lock
+
+# Backend build artifacts
+backend/bin/
+backend/obj/
+backend/.vs/
+backend/.vscode/
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+README*
+LICENSE

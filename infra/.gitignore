@@ -1,0 +1,23 @@
+# Terraform files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+*.backup
+*.tfplan
+plan.out
+override.tf
+override.tf.json
+.terraform.tfstate.lock.info
+.terragrunt-cache/
+*.sha256
+*.log
+
+# Crash logs
+crash.log
+
+# Sensitive files
+*.pem
+*.key
+secrets.auto.tfvars

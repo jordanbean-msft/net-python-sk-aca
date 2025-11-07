@@ -1,0 +1,11 @@
+########## Application Insights Module ##########
+
+resource "azurerm_application_insights" "main" {
+  count               = var.create ? 1 : 0
+  name                = var.name
+  location            = var.location
+  resource_group_name = var.resource_group_name
+  workspace_id        = var.workspace_id
+  application_type    = var.application_type
+  tags                = var.tags
+}
