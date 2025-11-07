@@ -30,6 +30,7 @@ services:
       - chatnet
 
   ai-service:
+    platform: linux/arm64
     build:
       context: ./src/ai-service
       dockerfile: Dockerfile
@@ -57,6 +58,7 @@ services:
       - chatnet
 
   weather-function:
+    platform: linux/amd64
     build:
       context: ./src/weather-function
       dockerfile: Dockerfile

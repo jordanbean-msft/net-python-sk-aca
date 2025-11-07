@@ -1,5 +1,10 @@
 var builder = WebApplication.CreateBuilder(args);
 
+// Configure logging levels
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(LogLevel.Information);
+
 // Configure Kestrel to use PORT from environment variable
 var port = builder.Configuration["PORT"] ?? "8080";
 builder.WebHost.ConfigureKestrel(serverOptions =>

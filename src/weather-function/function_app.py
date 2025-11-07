@@ -11,17 +11,12 @@ def health_check(req: func.HttpRequest) -> func.HttpResponse:
     """
     Health check endpoint for container readiness probes.
     """
-    logging.info('Health check endpoint called')
+    logging.debug("Health check endpoint called")
 
-    health_data = {
-        "status": "healthy",
-        "service": "Weather Function"
-    }
+    health_data = {"status": "healthy", "service": "Weather Function"}
 
     return func.HttpResponse(
-        body=json.dumps(health_data),
-        status_code=200,
-        mimetype="application/json"
+        body=json.dumps(health_data), status_code=200, mimetype="application/json"
     )
 
 
@@ -34,12 +29,12 @@ def get_weather(req: func.HttpRequest) -> func.HttpResponse:
     Query parameters:
     - location: The location to get weather for (optional)
     """
-    logging.info('Weather function triggered by request')
+    logging.info("Weather function triggered by request")
 
     # Get location from query parameters or use default
-    location = req.params.get('location', 'Seattle')
+    location = req.params.get("location", "Seattle")
 
-    logging.info('Processing weather request for location: %s', location)
+    logging.info("Processing weather request for location: %s", location)
 
     # Hardcoded weather data
     weather_data = {
@@ -50,13 +45,11 @@ def get_weather(req: func.HttpRequest) -> func.HttpResponse:
         "humidity": 65,
         "wind_speed": 8,
         "wind_unit": "mph",
-        "forecast": "Clear skies expected for the rest of the day"
+        "forecast": "Clear skies expected for the rest of the day",
     }
 
-    logging.info('Returning weather data for location: %s', location)
+    logging.info("Returning weather data for location: %s", location)
 
     return func.HttpResponse(
-        body=json.dumps(weather_data),
-        status_code=200,
-        mimetype="application/json"
+        body=json.dumps(weather_data), status_code=200, mimetype="application/json"
     )

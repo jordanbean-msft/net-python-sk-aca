@@ -147,7 +147,7 @@ module "ai_service" {
     LOG_LEVEL                             = "info"
     AZURE_AI_PROJECT_ENDPOINT             = module.ai_foundry.ai_foundry_endpoint
     AZURE_AI_MODEL_DEPLOYMENT             = module.ai_foundry.ai_model_deployment_name
-    WeatherFunctionUrl                    = "https://${module.weather_function_app.default_hostname}/api/weather"
+    WeatherFunctionUrl                    = "https://${module.weather_function_app.default_hostname}"
     APPLICATIONINSIGHTS_CONNECTION_STRING = module.app_insights.connection_string
     AZURE_CLIENT_ID                       = module.identity.client_id
   }

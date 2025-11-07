@@ -1,7 +1,12 @@
 ### AI Service API Testing
 ### Use the REST Client extension in VS Code to run these requests
+### Tests the multi-agent system with CoordinatorAgent and QueryAgent (weather tool)
 
 @baseUrl = http://localhost:8000
+
+###############################################################################
+# Health & Info Endpoints
+###############################################################################
 
 ### Health Check
 GET {{baseUrl}}/health
@@ -9,8 +14,57 @@ GET {{baseUrl}}/health
 ### Root Endpoint
 GET {{baseUrl}}/
 
-### Chat - Non-streaming (Simple message)
-POST {{baseUrl}}/chat
+###############################################################################
+# Weather Queries - Testing Agent Handoff & Tool Calling
+###############################################################################
+
+### Weather Query - Houston (Non-streaming)
+# Should trigger: CoordinatorAgent -> QueryAgent -> Weather Tool
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "What is the weather in Houston, TX?",
+  "stream": false
+}
+
+### Weather Query - Multiple Cities (Non-streaming)
+# Should trigger: CoordinatorAgent -> QueryAgent -> Weather Tool (multiple calls)
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "Can you tell me the weather in Seattle and New York?",
+  "stream": false
+}
+
+### Weather Query - Natural Language (Streaming)
+# Should trigger: CoordinatorAgent -> QueryAgent -> Weather Tool
+POST {{baseUrl}}/api/chat/stream
+Content-Type: application/json
+
+{
+  "message": "I'm planning a trip to San Francisco tomorrow. How's the weather looking?",
+  "stream": true
+}
+
+### Weather Query - Casual Question (Streaming)
+# Should trigger: CoordinatorAgent -> QueryAgent -> Weather Tool
+POST {{baseUrl}}/api/chat/stream
+Content-Type: application/json
+
+{
+  "message": "Should I bring an umbrella in Chicago today?",
+  "stream": true
+}
+
+###############################################################################
+# General Conversation - Testing CoordinatorAgent Direct Response
+###############################################################################
+
+### General Greeting (Non-streaming)
+# Should be handled by CoordinatorAgent directly (no handoff)
+POST {{baseUrl}}/api/chat
 Content-Type: application/json
 
 {
@@ -18,82 +72,123 @@ Content-Type: application/json
   "stream": false
 }
 
-### Chat - Non-streaming (With conversation history)
-POST {{baseUrl}}/chat
+### General Question (Non-streaming)
+# Should be handled by CoordinatorAgent directly (no handoff)
+POST {{baseUrl}}/api/chat
 Content-Type: application/json
 
 {
-  "message": "What did I just ask you?",
+  "message": "Tell me about Azure Container Apps",
+  "stream": false
+}
+
+### General Joke Request (Streaming)
+# Should be handled by CoordinatorAgent directly (no handoff)
+POST {{baseUrl}}/api/chat/stream
+Content-Type: application/json
+
+{
+  "message": "Tell me a programming joke",
+  "stream": true
+}
+
+###############################################################################
+# Conversation with History - Testing Context Awareness
+###############################################################################
+
+### Weather Follow-up Question
+# Should maintain context from previous weather query
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "What about tomorrow?",
   "history": {
     "messages": [
       {
-        "role": "system",
-        "content": "You are a helpful AI assistant."
-      },
-      {
         "role": "user",
-        "content": "What is the capital of France?"
+        "content": "What is the weather in Boston?"
       },
       {
         "role": "assistant",
-        "content": "The capital of France is Paris."
+        "content": "The current weather in Boston is partly cloudy with a temperature of 72°F."
       }
     ]
   },
   "stream": false
 }
 
-### Chat - Streaming
-POST {{baseUrl}}/chat/stream
+### Mixed Conversation - Weather then General
+POST {{baseUrl}}/api/chat
 Content-Type: application/json
 
 {
-  "message": "Tell me a short joke",
-  "stream": true
-}
-
-### Chat - Streaming with history
-POST {{baseUrl}}/chat/stream
-Content-Type: application/json
-
-{
-  "message": "Can you tell me another one?",
+  "message": "Thanks! Can you also explain what Semantic Kernel is?",
   "history": {
     "messages": [
       {
         "role": "user",
-        "content": "Tell me a joke"
+        "content": "What's the weather in Miami?"
       },
       {
         "role": "assistant",
-        "content": "Why did the programmer quit his job? Because he didn't get arrays!"
+        "content": "The current weather in Miami is partly cloudy with a temperature of 72°F. Humidity is at 65%."
       }
     ]
   },
-  "stream": true
+  "stream": false
 }
 
-### Chat - Complex conversation
-POST {{baseUrl}}/chat
+### General then Weather
+POST {{baseUrl}}/api/chat
 Content-Type: application/json
 
 {
-  "message": "What's 2+2?",
+  "message": "Actually, can you check the weather in Denver for me?",
   "history": {
     "messages": [
       {
-        "role": "system",
-        "content": "You are a math tutor that explains concepts clearly."
-      },
-      {
         "role": "user",
-        "content": "I need help with basic math"
+        "content": "Hello! How are you?"
       },
       {
         "role": "assistant",
-        "content": "I'd be happy to help you with basic math! What would you like to learn?"
+        "content": "Hello! I'm doing great, thank you for asking. How can I assist you today?"
       }
     ]
   },
+  "stream": false
+}
+
+###############################################################################
+# Edge Cases - Testing Agent Behavior
+###############################################################################
+
+### Ambiguous Weather Query
+# Should still trigger QueryAgent to handle weather-related request
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "Is it nice outside in Portland?",
+  "stream": false
+}
+
+### Weather + Additional Question
+# Should handle both weather query and additional context
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "What's the weather in Austin and should I go for a run?",
+  "stream": false
+}
+
+### Empty Message (Error Case)
+POST {{baseUrl}}/api/chat
+Content-Type: application/json
+
+{
+  "message": "",
   "stream": false
 }

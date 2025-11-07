@@ -1,0 +1,17 @@
+### Weather Function API Test
+
+@baseUrl = http://localhost:7071
+
+### Health Check
+GET {{baseUrl}}/api/health
+
+### Get Weather (example, adjust path if needed)
+GET {{baseUrl}}/api/weather?location=Seattle
+
+### Post Weather (if POST is supported)
+POST {{baseUrl}}/api/weather
+Content-Type: application/json
+
+{
+  "location": "Seattle"
+}

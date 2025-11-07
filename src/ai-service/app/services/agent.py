@@ -1,17 +1,19 @@
-"""Chat agent service using Semantic Kernel."""
+"""Multi-agent chat service using Semantic Kernel orchestration."""
 
 import logging
 from typing import AsyncGenerator
 
-from azure.identity.aio import (DefaultAzureCredential,
-                                get_bearer_token_provider)
+from azure.identity.aio import DefaultAzureCredential, get_bearer_token_provider
 from semantic_kernel import Kernel
-from semantic_kernel.connectors.ai.function_choice_behavior import \
-    FunctionChoiceBehavior
-from semantic_kernel.connectors.ai.open_ai import (
-    AzureChatCompletion, AzureChatPromptExecutionSettings)
-from semantic_kernel.contents import (FunctionCallContent,
-                                      StreamingChatMessageContent)
+from semantic_kernel.agents import (
+    ChatCompletionAgent,
+    HandoffOrchestration,
+    OrchestrationHandoffs,
+)
+from semantic_kernel.agents.runtime import InProcessRuntime
+from semantic_kernel.connectors.ai.open_ai import AzureChatCompletion
+from semantic_kernel.contents import ChatMessageContent
+from semantic_kernel.contents.utils.finish_reason import FinishReason
 
 from ..core.config import settings
 from ..models import ChatHistoryModel, chat_history_to_sk, sk_to_chat_history
@@ -21,12 +23,10 @@ logger = logging.getLogger(__name__)
 
 
 class ChatAgentService:
-    """Service for managing Azure AI Foundry Chat Completion Agent using Semantic Kernel."""
+    """Multi-agent orchestration service using Semantic Kernel."""
 
     def __init__(self):
-        """Initialize the chat agent service with Azure AI Foundry configuration."""
-        self.kernel = Kernel()
-
+        """Initialize multi-agent chat with handoff orchestration."""
         # Configure Azure OpenAI chat completion service
         # Use API key if provided, otherwise use Managed Identity
         if settings.azure_openai_api_key:
@@ -39,8 +39,7 @@ class ChatAgentService:
             # Use Managed Identity (best practice for production)
             credential = DefaultAzureCredential()
             token_provider = get_bearer_token_provider(
-                credential,
-                "https://cognitiveservices.azure.com/.default"
+                credential, "https://cognitiveservices.azure.com/.default"
             )
             self.chat_service = AzureChatCompletion(
                 deployment_name=settings.azure_ai_model_deployment,
@@ -48,25 +47,99 @@ class ChatAgentService:
                 ad_token_provider=token_provider,
             )
 
-        # Add the service to the kernel
-        self.kernel.add_service(self.chat_service)
+        # Create kernel for query agent with weather plugin
+        query_kernel = Kernel()
+        query_kernel.add_service(self.chat_service)
+        query_kernel.add_plugin(WeatherPlugin(), plugin_name="weather")
 
-        # Register weather plugin
-        self.kernel.add_plugin(WeatherPlugin(), plugin_name="weather")
+        # Get execution settings with function calling enabled
+        query_settings = query_kernel.get_prompt_execution_settings_from_service_id(
+            service_id=settings.azure_ai_model_deployment
+        )
+        from semantic_kernel.connectors.ai import FunctionChoiceBehavior
 
-        # Default execution settings with function calling enabled
-        self.execution_settings = AzureChatPromptExecutionSettings(
-            temperature=0.7,
-            top_p=0.95,
-            max_tokens=800,
-            function_choice_behavior=FunctionChoiceBehavior.Auto(),
+        query_settings.function_choice_behavior = FunctionChoiceBehavior.Auto()
+
+        # Create query agent with weather tool access
+        from semantic_kernel.functions import KernelArguments
+
+        self.query_agent = ChatCompletionAgent(
+            service=self.chat_service,
+            kernel=query_kernel,
+            name="QueryAgent",
+            instructions=(
+                "You are a query specialist agent that handles "
+                "weather information requests. "
+                "Use the weather tool to get current weather data "
+                "for any location the user asks about. "
+                "Provide clear, factual responses based on the "
+                "weather tool results. "
+                "When you have completed the weather query, use "
+                "complete_task to end with a summary."
+            ),
+            arguments=KernelArguments(settings=query_settings),
         )
 
-        # System instructions for the agent
-        self.system_message = """You are a helpful AI assistant.
-You provide clear, accurate, and concise responses to user questions.
-You are friendly and professional in your interactions.
-You have access to a weather tool that can provide current weather information for any location."""
+        # Create coordinator agent
+        coordinator_kernel = Kernel()
+        coordinator_kernel.add_service(self.chat_service)
+
+        # Get execution settings with function calling enabled
+        coordinator_settings = (
+            coordinator_kernel.get_prompt_execution_settings_from_service_id(
+                service_id=settings.azure_ai_model_deployment
+            )
+        )
+        coordinator_settings.function_choice_behavior = FunctionChoiceBehavior.Auto()
+
+        self.coordinator_agent = ChatCompletionAgent(
+            service=self.chat_service,
+            kernel=coordinator_kernel,
+            name="CoordinatorAgent",
+            instructions=(
+                "You are a helpful AI assistant that coordinates "
+                "user requests. "
+                "When users ask about weather information, transfer "
+                "to the QueryAgent using the transfer_to_QueryAgent function. "
+                "For general conversation, respond directly with "
+                "friendly, helpful answers and use complete_task "
+                "to end the conversation with a summary."
+            ),
+            arguments=KernelArguments(settings=coordinator_settings),
+        )
+
+        # Define handoff relationships using OrchestrationHandoffs
+        # CoordinatorAgent can handoff to QueryAgent
+        # QueryAgent can handoff back to CoordinatorAgent
+        self.handoffs = (
+            OrchestrationHandoffs()
+            .add(
+                self.coordinator_agent,
+                self.query_agent,
+                description="Transfer to QueryAgent for weather inquiries",
+            )
+            .add(
+                self.query_agent,
+                self.coordinator_agent,
+                description="Transfer back to CoordinatorAgent",
+            )
+        )
+
+        # Create the handoff orchestration (streaming callback set per request)
+        self.orchestration_template = {
+            "members": [self.coordinator_agent, self.query_agent],
+            "handoffs": self.handoffs,
+        }
+
+        # Create and start runtime
+        self.runtime = InProcessRuntime()
+        self.runtime.start()
+
+        # System message for chat history initialization
+        self.system_message = (
+            "You are a helpful AI assistant with access to "
+            "specialized agents for specific tasks like weather queries."
+        )
 
     async def stream_chat_completion(
         self,
@@ -74,7 +147,7 @@ You have access to a weather tool that can provide current weather information f
         chat_history: ChatHistoryModel | None = None,
     ) -> AsyncGenerator[str, None]:
         """
-        Stream chat completion responses from the Azure AI agent.
+        Stream chat completion using handoff orchestration.
 
         Args:
             user_message: The user's input message
@@ -93,46 +166,117 @@ You have access to a weather tool that can provide current weather information f
         # Add user message to history
         sk_history.add_user_message(user_message)
 
-        # Stream the response
-        response_text = ""
-        logger.info("Starting streaming for message: %s", user_message)
-        chunk_count = 0
-        async for chunk in self.chat_service.get_streaming_chat_message_contents(
-            chat_history=sk_history,
-            settings=self.execution_settings,
-            kernel=self.kernel,
-        ):
-            chunk_count += 1
-            # Semantic Kernel returns a list, get the first item
-            if isinstance(chunk, list) and len(chunk) > 0:
-                chunk = chunk[0]
+        # Prepare task with history and current message
+        messages = []
+        for msg in sk_history.messages:
+            messages.append(msg)
+
+        logger.info("Starting handoff orchestration for: %s", user_message)
+
+        # Use asyncio.Queue for thread-safe chunk passing
+        import asyncio
+
+        chunk_queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        async def streaming_callback(
+            chunk: object, _is_final: bool
+        ) -> None:  # StreamingChatMessageContent
+            """Callback to handle streaming chunks."""
+            # Import inside to avoid circular dependency issues
+            from semantic_kernel.contents import StreamingChatMessageContent
+
+            logger.debug(
+                "Streaming callback invoked: chunk_type=%s, is_final=%s",
+                type(chunk).__name__,
+                _is_final,
+            )
 
             if isinstance(chunk, StreamingChatMessageContent):
-                # Check for function/tool calls in the chunk
-                if hasattr(chunk, 'items') and chunk.items:
-                    for item in chunk.items:
-                        if isinstance(item, FunctionCallContent):
-                            # Only log complete function calls
-                            if item.name:
-                                logger.info(
-                                    "LLM requested tool call: "
-                                    "function='%s', plugin='%s', arguments=%s",
-                                    item.name,
-                                    getattr(item, 'plugin_name', 'N/A'),
-                                    item.arguments
-                                )
+                # Extract text content and put in queue
+                if hasattr(chunk, "content") and chunk.content:
+                    logger.debug("Queueing chunk: %r", chunk.content)
+                    await chunk_queue.put(chunk.content)
+                else:
+                    logger.debug("Chunk has no content: %s", chunk)
 
-                if chunk.content:
-                    response_text += chunk.content
-                    yield chunk.content
-
-        logger.debug(
-            "Streaming complete. Total text: %d chars",
-            len(response_text)
+        # Create orchestration with streaming callback
+        orchestration = HandoffOrchestration(
+            members=self.orchestration_template["members"],
+            handoffs=self.orchestration_template["handoffs"],
+            streaming_agent_response_callback=streaming_callback,
         )
-        # Add assistant's response to history
-        if response_text:
-            sk_history.add_assistant_message(response_text)
+
+        # Start orchestration in background task
+        async def run_orchestration():
+            try:
+                logger.info("Starting orchestration invoke")
+                orchestration_result = await orchestration.invoke(
+                    task=messages,
+                    runtime=self.runtime,
+                )
+                logger.info("Waiting for orchestration to complete")
+                # Wait for completion
+                result = await orchestration_result.get(timeout=60)
+                logger.info(
+                    "Orchestration complete, result type: %s",
+                    type(result).__name__,
+                )
+
+                # Fallback streaming if no native chunks
+                if chunk_queue.empty():
+                    logger.info("No streaming chunks; using fallback word streaming")
+                    from semantic_kernel.contents import ChatMessageContent
+
+                    if isinstance(result, ChatMessageContent):
+                        text = result.content or ""
+                    elif isinstance(result, list):
+                        text = " ".join(
+                            str(m.content)
+                            for m in result
+                            if hasattr(m, "content") and m.content
+                        )
+                    else:
+                        text = str(result)
+
+                    # Push word-sized chunks (granularity adjustable)
+                    for i, word in enumerate(text.split()):
+                        # Prefix space except first word to preserve spacing
+                        await chunk_queue.put((" " + word) if i else word)
+            except Exception as e:
+                logger.error("Orchestration error: %s", e, exc_info=True)
+                raise
+            finally:
+                # Signal completion by putting None in queue
+                logger.info("Signaling stream completion")
+                await chunk_queue.put(None)
+
+        # Create background task
+        orchestration_task = asyncio.create_task(run_orchestration())
+
+        try:
+            # Yield chunks as they arrive
+            logger.info("Starting to yield chunks from queue")
+            chunk_count = 0
+            while True:
+                chunk = await chunk_queue.get()
+                if chunk is None:
+                    # Orchestration complete
+                    logger.info(
+                        "Received completion signal, yielded %d chunks",
+                        chunk_count,
+                    )
+                    break
+                chunk_count += 1
+                logger.debug("Yielding chunk %d: %r", chunk_count, chunk)
+                yield chunk
+        finally:
+            # Ensure task is cleaned up
+            if not orchestration_task.done():
+                orchestration_task.cancel()
+                try:
+                    await orchestration_task
+                except asyncio.CancelledError:
+                    pass
 
     async def get_chat_completion(
         self,
@@ -140,7 +284,7 @@ You have access to a weather tool that can provide current weather information f
         chat_history: ChatHistoryModel | None = None,
     ) -> tuple[str, ChatHistoryModel]:
         """
-        Get a non-streaming chat completion response.
+        Get non-streaming chat completion using handoff orchestration.
 
         Args:
             user_message: The user's input message
@@ -159,40 +303,53 @@ You have access to a weather tool that can provide current weather information f
         # Add user message to history
         sk_history.add_user_message(user_message)
 
-        # Get response
-        response = await self.chat_service.get_chat_message_contents(
-            chat_history=sk_history,
-            settings=self.execution_settings,
-            kernel=self.kernel,
+        # Prepare task with history and current message
+        messages = []
+        for msg in sk_history.messages:
+            messages.append(msg)
+
+        logger.info("Invoking handoff orchestration for: %s", user_message)
+
+        # Create orchestration without streaming callback
+        orchestration = HandoffOrchestration(
+            members=self.orchestration_template["members"],
+            handoffs=self.orchestration_template["handoffs"],
         )
 
+        # Invoke orchestration
+        orchestration_result = await orchestration.invoke(
+            task=messages,
+            runtime=self.runtime,
+        )
+
+        # Get the result
+        result = await orchestration_result.get(timeout=60)
+
         # Extract response text
-        response_text = ""
-        if response and len(response) > 0:
-            # Get the content from the chat message
-            first_message = response[0]
+        if isinstance(result, ChatMessageContent):
+            response_text = result.content or ""
+            # Check for content filter
+            if (
+                hasattr(result, "finish_reason")
+                and result.finish_reason == FinishReason.CONTENT_FILTER
+            ):
+                logger.warning("Chat blocked by content filter")
+                if not response_text:
+                    response_text = (
+                        "I'm sorry, but I can't help with that "
+                        "request. It may involve content that "
+                        "cannot be shared."
+                    )
+        elif isinstance(result, list):
+            response_text = " ".join(
+                str(msg.content) for msg in result if hasattr(msg, "content")
+            )
+        else:
+            response_text = str(result)
 
-            # Check for function/tool calls in the response
-            if hasattr(first_message, 'items') and first_message.items:
-                for item in first_message.items:
-                    if isinstance(item, FunctionCallContent):
-                        logger.info(
-                            "LLM requested tool call: "
-                            "function='%s', plugin='%s', arguments=%s",
-                            item.name,
-                            getattr(item, 'plugin_name', 'N/A'),
-                            item.arguments
-                        )
-
-            if hasattr(first_message, "content") and first_message.content:
-                if isinstance(first_message.content, str):
-                    response_text = first_message.content
-                else:
-                    response_text = str(first_message.content)
-
-            # Add to history if we got a response
-            if response_text:
-                sk_history.add_assistant_message(response_text)
+        # Add response to history
+        if response_text:
+            sk_history.add_assistant_message(response_text)
 
         # Convert back to API model
         updated_history = sk_to_chat_history(sk_history)

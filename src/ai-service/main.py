@@ -3,12 +3,13 @@
 import logging
 import os
 
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+
 from app.core.config import settings
 from app.core.lifespan import lifespan
 from app.core.telemetry import setup_telemetry
 from app.routers import chat, health
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 # Configure Python logging
 log_level = os.getenv("LOG_LEVEL", "INFO").upper()
@@ -18,13 +19,16 @@ logging.basicConfig(
 )
 
 # Suppress verbose loggers from Azure SDK, httpx, and Semantic Kernel
-logging.getLogger(
-    "azure.core.pipeline.policies.http_logging_policy"
-).setLevel(logging.WARNING)
+logging.getLogger("azure.core.pipeline.policies.http_logging_policy").setLevel(
+    logging.WARNING
+)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("semantic_kernel").setLevel(logging.WARNING)
+logging.getLogger("semantic_kernel.agents").setLevel(logging.WARNING)
+logging.getLogger("semantic_kernel.agents.runtime").setLevel(logging.WARNING)
 logging.getLogger("urllib3").setLevel(logging.WARNING)
 logging.getLogger("opentelemetry").setLevel(logging.ERROR)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 # Set up Application Insights telemetry
 setup_telemetry()
@@ -45,6 +49,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Middleware to suppress health check logs
+@app.middleware("http")
+async def suppress_health_logs(request: Request, call_next):
+    """Suppress logging for health check endpoints."""
+    response = await call_next(request)
+    # Don't log health checks
+    if request.url.path in ["/health", "/"]:
+        return response
+    # Log other requests at trace level
+    logging.getLogger("uvicorn.access").log(
+        logging.DEBUG, f"{request.method} {request.url.path}"
+    )
+    return response
+
 
 # Include routers
 app.include_router(health.router)
